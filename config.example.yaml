@@ -1,0 +1,29 @@
+# Copy to config.yaml and replace the sample site with careers pages you want to watch.
+# The first successful check records current openings and does not email them.
+
+schedule_minutes: 30
+
+email:
+  to: you@example.com
+  subject_prefix: "[Jobs]"
+
+# Empty lists match every opening. Keywords are matched against the title and team.
+# Locations are matched against the location text.
+filters:
+  keywords: []
+  locations: []
+
+sites:
+  - name: Example Greenhouse
+    url: https://boards.greenhouse.io/example
+    # keywords: ["engineer", "python"]
+    # locations: ["remote"]
+
+  # - name: Example Lever
+  #   url: https://jobs.lever.co/example
+  #
+  # - name: Example Ashby
+  #   url: https://jobs.ashbyhq.com/example
+  #
+  # - name: Example careers page
+  #   url: https://example.com/careers
