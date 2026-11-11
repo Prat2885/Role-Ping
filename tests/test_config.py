@@ -30,6 +30,20 @@ sites:
     assert loaded.database_path() == (tmp_path / "data" / "jobs.sqlite").resolve()
 
 
+def test_empty_site_list_is_allowed(tmp_path):
+    path = tmp_path / "config.yaml"
+    _write_config(
+        path,
+        """
+email:
+  to: you@example.com
+sites: []
+""",
+    )
+    loaded = load_config(path)
+    assert loaded.app.sites == []
+
+
 def test_invalid_site_url_is_rejected(tmp_path):
     path = tmp_path / "config.yaml"
     _write_config(

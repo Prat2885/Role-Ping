@@ -34,8 +34,8 @@ def get_text(client: httpx.Client, url: str) -> str:
             f"HTTP {response.status_code} for {url}",
             status_code=response.status_code,
         )
-    if len(response.content) > 5_000_000:
-        raise FetchError(f"Response from {url} is larger than 5 MB")
+    if len(response.content) > 20_000_000:
+        raise FetchError(f"Response from {url} is larger than 20 MB")
     return response.text
 
 

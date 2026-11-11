@@ -37,12 +37,14 @@ def run_check(
     fetch_jobs: FetchJobs,
     send_alert: SendAlert,
     include_existing: bool = False,
+    deliver: bool = True,
 ) -> CheckReport:
     """Fetch each site, remember new openings, and email ones that should alert.
 
     The first successful check for a site records current matches as seeded and
     does not email them. Later checks email only openings that were not stored
     before. Pass include_existing to email the current list on that first check.
+    Pass deliver=False to leave them pending for one combined email.
     """
     results: list[SiteResult] = []
     for site in app.sites:
@@ -53,7 +55,7 @@ def run_check(
         if result.error is None:
             result.pending = sum(1 for job in to_send if job.site_name == result.site_name)
 
-    if not to_send:
+    if not to_send or not deliver:
         return CheckReport(results, [])
 
     try:

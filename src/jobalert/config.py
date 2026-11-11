@@ -70,7 +70,7 @@ class AppConfig(BaseModel):
     database: str = "data/jobs.sqlite"
     email: EmailConfig
     filters: Filters = Field(default_factory=Filters)
-    sites: list[SiteConfig] = Field(min_length=1)
+    sites: list[SiteConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_site_names(self) -> "AppConfig":

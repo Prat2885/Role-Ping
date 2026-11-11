@@ -52,25 +52,28 @@ Point Greenhouse, Lever, and Ashby entries at the board, for example `https://bo
 ## Commands
 
 ```powershell
+.\.venv\Scripts\jobalert.exe profile C:\path\to\cv.pdf
 .\.venv\Scripts\jobalert.exe check
 .\.venv\Scripts\jobalert.exe check --include-existing
 .\.venv\Scripts\jobalert.exe watch
 .\.venv\Scripts\jobalert.exe test-email
 ```
 
-`check` runs once and exits. `watch` repeats on `schedule_minutes` until you press Ctrl+C. `--include-existing` emails the openings already posted, and it only changes a site's first successful check.
+`check` runs once and exits. `watch` repeats on `schedule_minutes` until you press Ctrl+C. `--include-existing` emails the openings already posted on a company board, and it only changes that board's first successful check.
 
-Seen jobs are stored in `data/jobs.sqlite` next to the config file. Delete that file if you want a site to be treated as new again.
+`profile` reads a PDF, DOCX, or TXT CV and saves an experience level plus related job titles to search for. A backend intern is also searched as fullstack engineer, full stack engineer intern, backend engineer, backend developer, and software engineer. Set `LLM_API_KEY` or `OPENAI_API_KEY` in `.env` to have a chat model read the CV instead; without a key, the related-title list above is used. The CV itself is not emailed. After a profile exists, `check` and `watch` search the job boards, the YC directory, public LinkedIn job posts in India and remote posts from companies elsewhere, and company careers pages. Gemini reads the CV, then keeps only the openings that are real single roles for that candidate. A role is kept when it is in India, or when it is remote and not limited to another country. Office jobs outside India are left out. A posting is emailed only when its apply page is still open. Each check reads the boards and every company careers page that is due, then sends every legitimate match in one email. A saved careers page is read again on the next check. The schedule is 120 minutes, so a role that goes live is included in a mail within three hours. `sites` in `config.yaml` can be empty. Add a company there only when you want that one careers page watched as well. LinkedIn does not offer those employee or founder posts to an automated reader, so the check does not use LinkedIn.
+
+Seen jobs are stored in `data/jobs.sqlite` next to the config file. Delete that file if you want a site to be treated as new again. The CV profile is `data/profile.json`.
 
 ## Run it on a schedule
 
 After `check` and `test-email` succeed, register a Windows task:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\register-task.ps1 -EveryMinutes 30
+powershell -ExecutionPolicy Bypass -File .\scripts\register-task.ps1 -EveryMinutes 120
 ```
 
-The task runs `jobalert check` every 30 minutes, including after you sign in again. Remove it later with:
+The task runs `jobalert check` every 2 hours, including after you sign in again. Remove it later with:
 
 ```powershell
 Unregister-ScheduledTask -TaskName JobAlertAgent -Confirm:$false

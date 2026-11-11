@@ -1,6 +1,6 @@
 # Register a Windows scheduled task that runs one careers check on a loop.
 param(
-    [int]$EveryMinutes = 30,
+    [int]$EveryMinutes = 120,
     [string]$TaskName = "JobAlertAgent"
 )
 

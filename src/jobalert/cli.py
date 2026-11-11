@@ -6,16 +6,18 @@ from pathlib import Path
 import typer
 
 from jobalert.config import load_config, load_smtp
+from jobalert.discover import run_discover
 from jobalert.fetch import fetch_site, make_client
 from jobalert.models import ConfigError, Job
 from jobalert.notify import build_message, deliver_email
+from jobalert.profile import format_profile, load_profile, save_profile
 from jobalert.store import Store
 from jobalert.watcher import CheckReport, run_check
 
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="Watch careers pages and email new job openings.",
+    help="Watch careers pages and email openings that match a CV.",
 )
 
 
@@ -121,6 +123,37 @@ def test_email(
     logging.info("Sent a test email to %s.", loaded.app.email.to)
 
 
+@app.command()
+def profile(
+    cv: Path | None = typer.Argument(None, help="PDF, DOCX, or TXT CV to read."),
+    config: Path = typer.Option(
+        Path("config.yaml"),
+        "--config",
+        "-c",
+        help="Path to the YAML config.",
+    ),
+) -> None:
+    """Save the experience level and job titles used to search major boards."""
+    loaded = _load(config)
+    if cv is None:
+        try:
+            saved = load_profile(loaded.directory)
+        except ConfigError as exc:
+            logging.error("%s", exc)
+            raise typer.Exit(code=1) from exc
+        if saved is None:
+            logging.error("No CV profile yet. Example: jobalert profile resume.pdf")
+            raise typer.Exit(code=1)
+        logging.info("%s", format_profile(saved))
+        return
+    try:
+        saved = save_profile(loaded.directory, cv)
+    except ConfigError as exc:
+        logging.error("%s", exc)
+        raise typer.Exit(code=1) from exc
+    logging.info("Saved CV profile.\n%s", format_profile(saved))
+
+
 def _execute(loaded, include_existing: bool) -> CheckReport:
     smtp = load_smtp(loaded.directory)
 
@@ -129,15 +162,70 @@ def _execute(loaded, include_existing: bool) -> CheckReport:
         deliver_email(smtp, loaded.app.email.to, subject, body)
 
     with make_client() as client, Store(loaded.database_path()) as store:
-        report = run_check(
-            loaded.app,
-            store,
-            lambda site: fetch_site(client, site),
-            send_alert,
-            include_existing=include_existing,
-        )
+        reports = [
+            run_check(
+                loaded.app,
+                store,
+                lambda site: fetch_site(client, site),
+                send_alert,
+                include_existing=include_existing,
+                deliver=False,
+            )
+        ]
+        reports.append(_discover(loaded, store, client, send_alert, deliver=False))
+        pending = store.list_pending()
+        emailed: list[Job] = []
+        email_error = None
+        if pending:
+            try:
+                send_alert(pending)
+                store.mark_sent([(job.site_name, job.id) for job in pending])
+                emailed = pending
+            except Exception as exc:
+                email_error = str(exc)
+    report = _combine(reports)
+    report = CheckReport(report.sites, emailed, email_error or report.email_error)
     _log_report(report)
     return report
+
+
+def _discover(loaded, store, client, send_alert, deliver: bool = True) -> CheckReport:
+    try:
+        saved = load_profile(loaded.directory)
+    except ConfigError as exc:
+        logging.error("%s", exc)
+        return CheckReport([], [], str(exc))
+    if saved is None:
+        logging.info("No CV profile yet. Board search starts after: jobalert profile resume.pdf")
+        return CheckReport([], [])
+    logging.info(
+        "Searching job boards, the YC directory, and company careers pages for %s roles.",
+        saved.get("level"),
+    )
+    report = run_discover(
+        saved,
+        loaded.app.email,
+        store,
+        client,
+        send_alert,
+        env_file=loaded.directory / ".env",
+        deliver=deliver,
+    )
+    if not report.sites and not report.emailed:
+        logging.info("No live openings matched your experience level.")
+    return report
+
+
+def _combine(reports: list[CheckReport]) -> CheckReport:
+    sites = []
+    emailed = []
+    email_error = None
+    for report in reports:
+        sites.extend(report.sites)
+        emailed.extend(report.emailed)
+        if report.email_error and email_error is None:
+            email_error = report.email_error
+    return CheckReport(sites, emailed, email_error)
 
 
 def _load(config: Path):

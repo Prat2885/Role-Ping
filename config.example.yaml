@@ -1,5 +1,6 @@
-# Copy to config.yaml and replace the sample site with careers pages you want to watch.
-# The first successful check records current openings and does not email them.
+# Company boards are optional. Leave `sites` empty to search only the shared boards:
+# YC Work at a Startup, public Ashby, Greenhouse, and Lever listings, and the other
+# job boards selected from the CV. LinkedIn does not publish employee posts for this.
 
 schedule_minutes: 30
 
