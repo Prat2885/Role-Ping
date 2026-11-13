@@ -121,7 +121,8 @@ def indexes_from_llm(content: str, count: int) -> list[int]:
 
 def _select_batch(base_url: str, api_key: str, model: str, profile: dict, summary: str, jobs: list) -> list[int]:
     listing = []
-    for index, job in enumerate(jobs):
+    for index, item in enumerate(jobs):
+        job, snippet = _job_fields(item)
         listing.append(
             {
                 "n": index,
@@ -130,6 +131,7 @@ def _select_batch(base_url: str, api_key: str, model: str, profile: dict, summar
                 "source": job.site_name,
                 "location": job.location,
                 "url": job.url,
+                "snippet": snippet[:400],
             }
         )
     payload = {
@@ -145,8 +147,11 @@ def _select_batch(base_url: str, api_key: str, model: str, profile: dict, summar
                     "Keep a job only when it is one genuine opening this person can apply to. "
                     "Reject city or role index pages, 'jobs in <city>' pages, lists of jobs, "
                     "and anything that is not a single role. "
-                    "Reject senior, staff, director, principal, and lead roles when the candidate "
-                    "is an intern or junior. "
+                    "Reject senior, staff, director, principal, lead, II, III, and IV roles "
+                    "when the candidate is an intern or junior. "
+                    "Reject any role that asks for more years than the candidate has. "
+                    "A candidate with about 1 year only matches intern, associate, new-grad, "
+                    "and junior roles that ask for 0 to 1 year. "
                     "Keep software, backend, fullstack, and closely related engineering roles "
                     "at the candidate's level, including associate and junior titles. "
                     "Keep India roles and remote roles from YC, company careers pages, "
@@ -185,10 +190,21 @@ def _select_batch(base_url: str, api_key: str, model: str, profile: dict, summar
         logging.info("Gemini match batch failed: %s", exc)
         return [
             index
-            for index, job in enumerate(jobs)
-            if job_fits(profile, job.title, "", None)
+            for index, item in enumerate(jobs)
+            if job_fits(profile, *_fit_args(item))
         ]
     return indexes_from_llm(content, len(jobs))
+
+
+def _job_fields(item):
+    job = getattr(item, "job", item)
+    snippet = getattr(item, "text", "") or ""
+    return job, snippet
+
+
+def _fit_args(item) -> tuple[str, str, str | None]:
+    job, snippet = _job_fields(item)
+    return job.title, snippet, getattr(item, "stated_level", None)
 
 
 def _settings(env_file: Path | None) -> tuple[str, str, str] | None:

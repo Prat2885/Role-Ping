@@ -46,6 +46,12 @@ def assess_page(status_code: int, html: str) -> str:
 
 
 def page_is_live(client: httpx.Client, url: str) -> str:
+    state, _text = read_apply_page(client, url)
+    return state
+
+
+def read_apply_page(client: httpx.Client, url: str) -> tuple[str, str]:
+    """Return whether the apply page is open, and the visible text."""
     try:
         response = client.get(
             url,
@@ -53,9 +59,10 @@ def page_is_live(client: httpx.Client, url: str) -> str:
             headers={"User-Agent": _BROWSER, "Accept": "text/html"},
         )
     except httpx.HTTPError:
-        return "unknown"
+        return "unknown", ""
     body = response.text[:1_000_000] if response.text else ""
-    return listing_state(response.status_code, body, str(response.url))
+    state = listing_state(response.status_code, body, str(response.url))
+    return state, _visible_text(body)[:8000]
 
 
 def listing_state(status_code: int, html: str, url: str = "") -> str:

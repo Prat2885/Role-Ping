@@ -5,7 +5,7 @@ from pathlib import Path
 
 from jobalert.config import AppConfig, EmailConfig, Filters, SiteConfig
 from jobalert.level import job_fits, level_distance
-from jobalert.liveness import page_is_live
+from jobalert.liveness import page_is_live, read_apply_page
 from jobalert.llm_scan import select_matching_jobs
 from jobalert.models import FetchError, Job
 from jobalert.place import place_fits
@@ -68,12 +68,21 @@ def choose_openings(
     return chosen, closed
 
 
-def _live_only(openings: list[Opening], is_live) -> tuple[list[Job], list[tuple[str, str]]]:
+def _live_only(profile: dict, openings: list[Opening], read_page) -> tuple[list[Job], list[tuple[str, str]]]:
     chosen: list[Job] = []
     closed: list[tuple[str, str]] = []
     for opening in openings:
         job = opening.job
-        state = is_live(job)
+        if not job_fits(profile, job.title, opening.text, opening.stated_level):
+            continue
+        state, page_text = read_page(job.url)
+        if state == "live" and not job_fits(
+            profile,
+            job.title,
+            f"{opening.text} {page_text}",
+            opening.stated_level,
+        ):
+            continue
         if state == "closed":
             closed.append((job.site_name, job.id))
         elif state == "live":
@@ -106,6 +115,7 @@ def run_discover(
         opening
         for opening in located
         if not store.is_known(opening.job.site_name, opening.job.id) and not opening.expired
+        and job_fits(profile, opening.job.title, opening.text, opening.stated_level)
     ]
     logging.info(
         "Careers pages listed %s role links. %s are in India or remote. %s are new.",
@@ -113,7 +123,7 @@ def run_discover(
         len(located),
         len(fresh),
     )
-    selected = select_matching_jobs(profile, [opening.job for opening in fresh], env_file)
+    selected = select_matching_jobs(profile, fresh, env_file)
     if selected is None:
         chosen, closed_keys = choose_openings(
             profile,
@@ -124,8 +134,9 @@ def run_discover(
     else:
         picked = [fresh[index] for index in sorted(selected) if index < len(fresh)]
         chosen, closed_keys = _live_only(
+            profile,
             picked,
-            lambda job: page_is_live(client, job.url),
+            lambda url: read_apply_page(client, url),
         )
         logging.info(
             "Gemini kept %s of %s unseen openings. %s of those pages are still open.",

@@ -13,11 +13,15 @@ _STATED = (
     ("executive", "director"),
 )
 _MIN_YEARS = re.compile(
-    r"(?:at least\s+)?(\d{1,2})\s*\+?\s*(?:years|yrs)\b",
+    r"(?:at least|minimum|min\.?)?\s*(\d{1,2})\s*\+?\s*(?:years|yrs)\b",
     re.IGNORECASE,
 )
 _YEAR_RANGE = re.compile(
     r"(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(?:years|yrs)\b",
+    re.IGNORECASE,
+)
+_NUMERAL = re.compile(
+    r"\b(?:engineer|developer|sde)\s*(iii|ii|iv|[2-4])\b",
     re.IGNORECASE,
 )
 
@@ -25,11 +29,13 @@ _YEAR_RANGE = re.compile(
 def job_fits(profile: dict, title: str, text: str = "", stated_level: str | None = None) -> bool:
     """Return whether a posting is close to the CV seniority band."""
     profile_level = str(profile.get("level") or "mid")
-    job_level = _job_level(title, stated_level)
+    job_level = _job_level(title, stated_level) or _numeral_level(title)
+    if profile_level in {"intern", "junior"} and job_level in {"mid", "senior", "staff", "director"}:
+        return False
     if job_level is not None and abs(_rank(job_level) - _rank(profile_level)) > 1:
         return False
     years = profile.get("years")
-    minimum = _minimum_years(text)
+    minimum = _minimum_years(f"{title} {text}")
     if years is not None and minimum is not None and float(years) + 0.5 < minimum:
         return False
     return True
@@ -55,6 +61,16 @@ def _job_level(title: str, stated_level: str | None) -> str | None:
         if phrase in folded:
             return level
     return None
+
+
+def _numeral_level(title: str) -> str | None:
+    match = _NUMERAL.search(title)
+    if match is None:
+        return None
+    token = match.group(1).casefold()
+    if token in {"ii", "2"}:
+        return "mid"
+    return "senior"
 
 
 def _rank(level: str) -> int:
